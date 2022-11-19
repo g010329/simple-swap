@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import { ISimpleSwap } from "./interface/ISimpleSwap.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import "hardhat/console.sol";
 
 contract SimpleSwap is ISimpleSwap, ERC20 {
@@ -33,7 +34,34 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         uint256 amountAIn,
         uint256 amountBIn
     ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
-        return (0, 0, 0);
+        require(amountAIn > 0 && amountBIn > 0, "SimpleSwap: INSUFFICIENT_INPUT_AMOUNT");
+
+        uint256 _totalSupply = totalSupply();
+        uint256 _liquidity;
+        uint256 _addedAmountAIn = amountAIn;
+        uint256 _addedAmountBIn = amountBIn;
+        address _msgSender = _msgSender();
+
+        if (_totalSupply == 0) {
+            // first time to add liquidity
+            _liquidity = Math.sqrt(amountAIn * amountBIn);
+        } else {
+            // not first time to add liquidity
+            _liquidity = Math.min((amountAIn * _totalSupply) / _reserveA, (amountBIn * _totalSupply) / _reserveB);
+
+            _addedAmountAIn = (_liquidity * _reserveA) / _totalSupply;
+            _addedAmountBIn = (_liquidity * _reserveB) / _totalSupply;
+        }
+
+        ERC20(aToken).transferFrom(_msgSender, address(this), _addedAmountAIn);
+        ERC20(bToken).transferFrom(_msgSender, address(this), _addedAmountBIn);
+
+        _updateReserve();
+        _mint(_msgSender, _liquidity);
+
+        emit AddLiquidity(_msgSender, _addedAmountAIn, _addedAmountBIn, _liquidity);
+
+        return (_addedAmountAIn, _addedAmountBIn, _liquidity);
     }
 
     function removeLiquidity(uint256 liquidity) external returns (uint256 amountA, uint256 amountB) {
@@ -48,12 +76,17 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     /// @notice Get the address of tokenA
     /// @return tokenA The address of tokenA
     function getTokenA() external view returns (address tokenA) {
-        return aToken;
+        tokenA = aToken;
     }
 
     /// @notice Get the address of tokenB
     /// @return tokenB The address of tokenB
     function getTokenB() external view returns (address tokenB) {
-        return bToken;
+        tokenB = bToken;
+    }
+
+    function _updateReserve() private {
+        _reserveA = ERC20(aToken).balanceOf(address(this));
+        _reserveB = ERC20(bToken).balanceOf(address(this));
     }
 }
