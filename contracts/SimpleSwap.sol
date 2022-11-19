@@ -16,6 +16,15 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     uint256 private _reserveA;
     uint256 private _reserveB;
 
+    uint256 private _unlocked = 1;
+
+    modifier lock() {
+        require(_unlocked == 1, "SimpleSwap: LOCKED");
+        _unlocked = 0;
+        _;
+        _unlocked = 1;
+    }
+
     constructor(address _token0, address _token1) ERC20("LP token", "LPT") {
         require(_token0 != address(0), "SimpleSwap: TOKENA_IS_NOT_CONTRACT");
         require(_token1 != address(0), "SimpleSwap: TOKENB_IS_NOT_CONTRACT");
@@ -26,7 +35,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         bToken = _tokenB;
     }
 
-    function swap(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256 amountOut) {
+    function swap(address tokenIn, address tokenOut, uint256 amountIn) external lock returns (uint256 amountOut) {
         require(tokenIn != address(0) && (tokenIn == aToken || tokenIn == bToken), "SimpleSwap: INVALID_TOKEN_IN");
         require(tokenOut != address(0) && (tokenOut == aToken || tokenOut == bToken), "SimpleSwap: INVALID_TOKEN_OUT");
         require(tokenOut != tokenIn, "SimpleSwap: IDENTICAL_ADDRESS");
@@ -45,7 +54,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         ERC20(tokenOut).approve(address(this), amountOut);
         ERC20(tokenOut).transferFrom(address(this), _msgSender(), amountOut);
 
-        _updateReserve();
+        _updateReserves();
 
         emit Swap(_msgSender(), tokenIn, tokenOut, amountIn, amountOut);
     }
@@ -53,7 +62,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     function addLiquidity(
         uint256 amountAIn,
         uint256 amountBIn
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+    ) external lock returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
         require(amountAIn > 0 && amountBIn > 0, "SimpleSwap: INSUFFICIENT_INPUT_AMOUNT");
 
         uint256 _totalSupply = totalSupply();
@@ -74,13 +83,13 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         ERC20(aToken).transferFrom(_msgSender, address(this), amountA);
         ERC20(bToken).transferFrom(_msgSender, address(this), amountB);
 
-        _updateReserve();
+        _updateReserves();
         _mint(_msgSender, liquidity);
 
         emit AddLiquidity(_msgSender, amountA, amountB, liquidity);
     }
 
-    function removeLiquidity(uint256 liquidity) external returns (uint256 amountA, uint256 amountB) {
+    function removeLiquidity(uint256 liquidity) external lock returns (uint256 amountA, uint256 amountB) {
         require(liquidity > 0, "SimpleSwap: INSUFFICIENT_LIQUIDITY_BURNED");
 
         address _msgSender = _msgSender();
@@ -100,7 +109,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         _transfer(_msgSender, address(this), liquidity);
         _burn(address(this), liquidity);
 
-        _updateReserve();
+        _updateReserves();
 
         emit RemoveLiquidity(_msgSender, amountA, amountB, liquidity);
     }
@@ -122,7 +131,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         tokenB = bToken;
     }
 
-    function _updateReserve() private {
+    function _updateReserves() private {
         _reserveA = ERC20(aToken).balanceOf(address(this));
         _reserveB = ERC20(bToken).balanceOf(address(this));
     }
