@@ -27,7 +27,27 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     }
 
     function swap(address tokenIn, address tokenOut, uint256 amountIn) external returns (uint256 amountOut) {
-        return 0;
+        require(tokenIn != address(0) && (tokenIn == aToken || tokenIn == bToken), "SimpleSwap: INVALID_TOKEN_IN");
+        require(tokenOut != address(0) && (tokenOut == aToken || tokenOut == bToken), "SimpleSwap: INVALID_TOKEN_OUT");
+        require(tokenOut != tokenIn, "SimpleSwap: IDENTICAL_ADDRESS");
+        require(amountIn > 0, "SimpleSwap: INSUFFICIENT_INPUT_AMOUNT");
+
+        if (_reserveA == 0 || _reserveB == 0 || totalSupply() == 0) {
+            amountOut = 0;
+        } else {
+            amountOut = tokenIn == aToken
+                ? (amountIn * _reserveB) / (_reserveA + amountIn) // SimpleSwap.spec.ts line: 317
+                : (amountIn * _reserveA) / (_reserveB + amountIn);
+        }
+        require(amountOut > 0, "SimpleSwap: INSUFFICIENT_OUTPUT_AMOUNT");
+
+        ERC20(tokenIn).transferFrom(_msgSender(), address(this), amountIn);
+        ERC20(tokenOut).approve(address(this), amountOut);
+        ERC20(tokenOut).transferFrom(address(this), _msgSender(), amountOut);
+
+        _updateReserve();
+
+        emit Swap(_msgSender(), tokenIn, tokenOut, amountIn, amountOut);
     }
 
     function addLiquidity(
@@ -37,31 +57,27 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         require(amountAIn > 0 && amountBIn > 0, "SimpleSwap: INSUFFICIENT_INPUT_AMOUNT");
 
         uint256 _totalSupply = totalSupply();
-        uint256 _liquidity;
-        uint256 _addedAmountAIn = amountAIn;
-        uint256 _addedAmountBIn = amountBIn;
         address _msgSender = _msgSender();
 
         if (_totalSupply == 0) {
-            // first time to add liquidity
-            _liquidity = Math.sqrt(amountAIn * amountBIn);
-        } else {
-            // not first time to add liquidity
-            _liquidity = Math.min((amountAIn * _totalSupply) / _reserveA, (amountBIn * _totalSupply) / _reserveB);
+            liquidity = Math.sqrt(amountAIn * amountBIn);
 
-            _addedAmountAIn = (_liquidity * _reserveA) / _totalSupply;
-            _addedAmountBIn = (_liquidity * _reserveB) / _totalSupply;
+            amountA = amountAIn;
+            amountB = amountBIn;
+        } else {
+            liquidity = Math.min((amountAIn * _totalSupply) / _reserveA, (amountBIn * _totalSupply) / _reserveB);
+
+            amountA = (liquidity * _reserveA) / _totalSupply;
+            amountB = (liquidity * _reserveB) / _totalSupply;
         }
 
-        ERC20(aToken).transferFrom(_msgSender, address(this), _addedAmountAIn);
-        ERC20(bToken).transferFrom(_msgSender, address(this), _addedAmountBIn);
+        ERC20(aToken).transferFrom(_msgSender, address(this), amountA);
+        ERC20(bToken).transferFrom(_msgSender, address(this), amountB);
 
         _updateReserve();
-        _mint(_msgSender, _liquidity);
+        _mint(_msgSender, liquidity);
 
-        emit AddLiquidity(_msgSender, _addedAmountAIn, _addedAmountBIn, _liquidity);
-
-        return (_addedAmountAIn, _addedAmountBIn, _liquidity);
+        emit AddLiquidity(_msgSender, amountA, amountB, liquidity);
     }
 
     function removeLiquidity(uint256 liquidity) external returns (uint256 amountA, uint256 amountB) {
