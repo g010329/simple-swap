@@ -81,7 +81,28 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     }
 
     function removeLiquidity(uint256 liquidity) external returns (uint256 amountA, uint256 amountB) {
-        return (0, 0);
+        require(liquidity > 0, "SimpleSwap: INSUFFICIENT_LIQUIDITY_BURNED");
+
+        address _msgSender = _msgSender();
+        uint256 _totalSupply = totalSupply();
+
+        // FIXME: AssertionError: Expected the balances of TokenB tokens for 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 to change by 10000000000000000000,-10000000000000000000, respectively, but they changed by 0,0
+        // amountA = (liquidity / _totalSupply) * _reserveA;
+        // amountB = (liquidity / _totalSupply) * _reserveB;
+        amountA = (liquidity * _reserveA) / _totalSupply;
+        amountB = (liquidity * _reserveB) / _totalSupply;
+
+        ERC20(aToken).approve(address(this), amountA);
+        ERC20(aToken).transferFrom(address(this), _msgSender, amountA);
+        ERC20(bToken).approve(address(this), amountB);
+        ERC20(bToken).transferFrom(address(this), _msgSender, amountB);
+
+        _transfer(_msgSender, address(this), liquidity);
+        _burn(address(this), liquidity);
+
+        _updateReserve();
+
+        emit RemoveLiquidity(_msgSender, amountA, amountB, liquidity);
     }
 
     function getReserves() external view returns (uint256 reserveA, uint256 reserveB) {
