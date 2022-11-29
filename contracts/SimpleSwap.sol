@@ -101,10 +101,8 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         amountA = (liquidity * _reserveA) / _totalSupply;
         amountB = (liquidity * _reserveB) / _totalSupply;
 
-        ERC20(aToken).approve(address(this), amountA);
-        ERC20(aToken).transferFrom(address(this), _msgSender, amountA);
-        ERC20(bToken).approve(address(this), amountB);
-        ERC20(bToken).transferFrom(address(this), _msgSender, amountB);
+        ERC20(aToken).transfer(_msgSender, amountA);
+        ERC20(bToken).transfer(_msgSender, amountB);
 
         _transfer(_msgSender, address(this), liquidity);
         _burn(address(this), liquidity);
